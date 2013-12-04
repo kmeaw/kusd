@@ -46,7 +46,7 @@ class Client
     if result.nil?
       raise IOError.new "Connection lost"
     end
-    if result < 0 and result > -256
+    if (-255 ... 0) === result
       raise SystemCallError.new(-result)
     else
       result
@@ -67,6 +67,18 @@ class Client
     data = @s.read(b)
     @s.read(8).unpack("q").first
     data
+  end
+
+  def write(buf)
+    raise RuntimeError unless @scratch
+    buf.bytes.each_slice(Syscalls::PAGE_SIZE) do |bb|
+      b = bb.pack("C*")
+      @s << self.pack(NR_read, 3, @scratch, b.size)
+      data = @s.write(b)
+      b = @s.read(8).unpack("q").first
+      raise SystemCallError.new(-b) if (-255 ... 0) === b
+      yield b if block_given?
+    end
   end
 
   def read(b=Syscalls::PAGE_SIZE)

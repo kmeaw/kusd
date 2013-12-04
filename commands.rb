@@ -185,6 +185,35 @@ module Commands
     end
   end
 
+  class Tee < Command
+    def manifest
+      [:data]
+    end
+
+    def initialize(t, *files)
+      super(t)
+      @files = files
+    end
+
+    def run(cli)
+      fds = []
+      @files.each do |f|
+        fds << cli.call!( Syscalls::NR_open, cli.scratch(f + "\0"), Syscalls::O_WRONLY | Syscalls::O_CREAT, 0666 )
+      end
+
+      fetchall do |data|
+	buf = data.join
+	cli.write(buf) do |nbytes|
+	  fds.each do |fd|
+	    cli.call! Syscalls::NR_write, fd, cli.scratch, nbytes
+	  end
+	end
+      end
+    ensure
+      fds.each { |fd| cli.call! Syscalls::NR_close, fd }
+    end
+  end
+
   class Cat < Command
     def manifest
       [:data]
