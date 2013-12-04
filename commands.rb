@@ -436,7 +436,7 @@ module Commands
 	      rss_rlim, start_code, end_code, start_stack, kstk_esp, kstk_eip , \
 	      signal, blocked, sigignore, sigcatch , \
 	      wchan, nswap, cnswap, exit_signal , \
-	      cpu_last_seen_on]
+	      cpu_last_seen_on] if pid
 	  end
 	rescue Errno::ENOENT
 	  nil
