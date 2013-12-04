@@ -153,6 +153,23 @@ module Commands
     end
   end
 
+  class Where < Command
+    def initialize(t, condition)
+      super(t)
+      @condition = condition
+    end
+
+    def run(cli)
+      v = nil
+      b = binding
+      fetchall do |data| 
+	# Regexp.new( (["(.*)"]*data.size).join("\0") ) =~ data.join("\0") # fill $1..$n
+	@parent_manifest.each_with_index{|k,i| v=data[i]; eval("#{k}=v", b)}
+	yield data if eval(@condition, b)
+      end
+    end
+  end
+
   class Pwd < Command
     def manifest
       [:name]
@@ -460,6 +477,27 @@ module Commands
 	c += 1
       end
       data.each {|d| yield d}
+    end
+  end
+
+  class Dmesg < Command
+    def run(cli)
+      sz = cli.call! Syscalls::NR_syslog, 10, 0, 0 rescue 262144
+      sz += [0].pack("q").size
+      sz1 = ( (((sz)) + Syscalls::PAGE_SIZE - 1) & (~(Syscalls::PAGE_SIZE - 1))) # round up to page size
+      ptr = cli.call! Syscalls::NR_mmap, 0, sz1, Syscalls::PROT_READ | Syscalls::PROT_WRITE, Syscalls::MAP_PRIVATE | Syscalls::MAP_ANONYMOUS, -1, 0
+      cli.call! Syscalls::NR_syslog, 3, ptr, sz
+      buf = cli.readptr(ptr, sz).sub(/[\000]+\Z/, '')
+      File.open("/tmp/dmesg", "w") {|f| f << buf }
+      cli.call! Syscalls::NR_munmap, ptr, sz1
+      buf.chomp.split("\n").each do |line|
+	loglevel, time, message = line.scan(/^<(\d+)>(?:\[([0-9.]+)\]) (.*)$/).first
+	yield [[:emerg, :alert, :crit, :err, :warning, :notice, :info, :debug][loglevel.to_i], time.to_f, message]
+      end
+    end
+
+    def manifest
+      [:loglevel, :time, :message]
     end
   end
 end
