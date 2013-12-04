@@ -234,7 +234,7 @@ module Commands
 
     def initialize(t, n)
       super(t)
-      @n = n
+      @n = n.to_i
     end
 
     def run(cli)
