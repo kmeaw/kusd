@@ -63,7 +63,11 @@ class Eval
 	    wr.close
 	    manifest = cmd.new(manifest, *stmt[:arguments]).manifest
 	    if command.empty?
-	      p manifest
+	      if STDOUT.tty?
+		print "\e[33m"
+	        p manifest
+		print "\e[0m"
+	      end
 	      until rd.eof?
 		p Marshal.load(rd)
 	      end
