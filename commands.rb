@@ -474,7 +474,6 @@ module Commands
       fetchall do |d|
 	data << d
 	data.shift if data.size > @n
-	c += 1
       end
       data.each {|d| yield d}
     end
