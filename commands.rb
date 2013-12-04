@@ -427,5 +427,40 @@ module Commands
       end
     end
   end
+
+  class Head < Command
+    def initialize(t, n=10)
+      super(t)
+      @n = n
+    end
+
+    def run(cli)
+      c = 0
+      return if @n.zero?
+      fetchall do |d|
+	yield d
+	c += 1
+	return if c >= @n
+      end
+    end
+  end
+
+  class Tail < Command
+    def initialize(t, n=10)
+      super(t)
+      @n = n
+    end
+
+    def run(cli)
+      data = []
+      return if @n.zero?
+      fetchall do |d|
+	data << d
+	data.shift if data.size > @n
+	c += 1
+      end
+      data.each {|d| yield d}
+    end
+  end
 end
 
