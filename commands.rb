@@ -410,18 +410,18 @@ module Commands
 	      wchan, nswap, cnswap, exit_signal, 
 	      cpu_last_seen_on = 
 	    rest.scanf("%c %u " \
-	               "%u %u %d %*s " \
-		       "%*s %*s %*s %*s %*s " \
-		       "%lu %lu " \
-		       "%*s %*s %*s " \
-		       "%ld " \
-		       "%*s %*s " \
-		       "%lu " \
-		       "%lu " \
-		       "%lu " \
-		       "%*s %*s %*s %*s %*s %*s " \
-		       "%*s %*s %*s %*s " \
-		       "%*s %*s %*s %*s " \
+	               "%u %u %d %d " \
+		       "%d %d %d %d %d " \
+		       "%u %u " \
+		       "%d %d %d " \
+		       "%d " \
+		       "%d %d " \
+		       "%u " \
+		       "%u " \
+		       "%u " \
+		       "%d %d %d %d %d %d " \
+		       "%d %d %d %d " \
+		       "%d %d %d %d " \
 		       "%d")
 	    yield [pid.to_i, comm, state, ppid , \
 	      pgid, sid, tty, tpgid , \
