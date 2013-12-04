@@ -1,4 +1,5 @@
 require 'stringio'
+require 'scanf'
 
 class Command
   attr_accessor :in
@@ -175,11 +176,11 @@ module Commands
 
     def run(cli)
       @files.each do |file|
-	fd = cli.call! Syscalls::NR_open, cli.scratch(file + "\0"), Syscalls::O_RDONLY
-	while (n = cli.call! Syscalls::NR_read, fd, cli.scratch, Syscalls::PAGE_SIZE) > 0
-	  yield [cli.read(n)]
+	cli.open_with file do |fd|
+	  while (n = cli.call! Syscalls::NR_read, fd, cli.scratch, Syscalls::PAGE_SIZE) > 0
+	    yield [cli.read(n)]
+	  end
 	end
-	cli.call! Syscalls::NR_close, fd
       end
     end
   end
@@ -325,6 +326,106 @@ module Commands
     end
   end
 
+  class Ps < Command
+    def manifest
+      [:pid]
+    end
 
+    def run(cli)
+      dir = "/proc"
+      fd = cli.call! Syscalls::NR_open, cli.scratch(dir + "\000"), Syscalls::O_RDONLY
+      while (n = cli.call! Syscalls::NR_getdents, fd, cli.scratch, Syscalls::PAGE_SIZE) > 0
+	dents = StringIO.new cli.read(n)
+	while data = dents.read(8+8+2)
+	  data = data.unpack("qqs")
+	  d_ino, d_off, d_reclen = data
+	  break if d_reclen == 0
+	  rest = dents.read(d_reclen-(8+8+2))
+	  lastbyte = rest.bytes[-1]
+	  d_name = rest.sub /\x00.*/m, ''
+	  d_name.force_encoding Encoding::UTF_8
+	  yield [d_name.to_i] if d_name =~ /\A\d+\Z/ and lastbyte == 4
+	end
+      end
+      cli.call! Syscalls::NR_close, fd
+    end
+  end
+
+  class Pstat < Command
+    def manifest
+      [:pid, :comm, :state, :ppid, 
+	      :pgid, :sid, :tty, :tpgid, 
+	      :flags, :min_flt, :cmin_flt, :maj_flt, :cmaj_flt, 
+	      :utime, :stime, 
+	      :cutime, :cstime, :priority, 
+	      :nice, 
+	      :timeout, :it_real_value, 
+	      :start_time, 
+	      :vsize, 
+	      :rss, 
+	      :rss_rlim, :start_code, :end_code, :start_stack, :kstk_esp, :kstk_eip, 
+	      :signal, :blocked, :sigignore, :sigcatch, 
+	      :wchan, :nswap, :cnswap, :exit_signal, 
+	      :cpu_last_seen_on]
+    end
+
+    def run(cli)
+      fetchall do |pid,cdr|
+	begin
+	  cli.open_with "/proc/#{pid}/stat" do |fd|
+	    stat = ""
+	    while (n = cli.call! Syscalls::NR_read, fd, cli.scratch, Syscalls::PAGE_SIZE) > 0
+	      stat += cli.read(n)
+	    end
+	    pid, comm, rest = stat.scan(/(\d+) [(](.*)[)] (.*)/).first
+	    state, ppid, 
+	      pgid, sid, tty, tpgid, 
+	      flags, min_flt, cmin_flt, maj_flt, cmaj_flt, 
+	      utime, stime, 
+	      cutime, cstime, priority, 
+	      nice, 
+	      timeout, it_real_value, 
+	      start_time, 
+	      vsize, 
+	      rss, 
+	      rss_rlim, start_code, end_code, start_stack, kstk_esp, kstk_eip, 
+	      signal, blocked, sigignore, sigcatch, 
+	      wchan, nswap, cnswap, exit_signal, 
+	      cpu_last_seen_on = 
+	    rest.scanf("%c %u " \
+	               "%u %u %d %*s " \
+		       "%*s %*s %*s %*s %*s " \
+		       "%lu %lu " \
+		       "%*s %*s %*s " \
+		       "%ld " \
+		       "%*s %*s " \
+		       "%lu " \
+		       "%lu " \
+		       "%lu " \
+		       "%*s %*s %*s %*s %*s %*s " \
+		       "%*s %*s %*s %*s " \
+		       "%*s %*s %*s %*s " \
+		       "%d")
+	    yield [pid.to_i, comm, state, ppid , \
+	      pgid, sid, tty, tpgid , \
+	      flags, min_flt, cmin_flt, maj_flt, cmaj_flt , \
+	      utime, stime , \
+	      cutime, cstime, priority , \
+	      nice , \
+	      timeout, it_real_value , \
+	      start_time , \
+	      vsize , \
+	      rss , \
+	      rss_rlim, start_code, end_code, start_stack, kstk_esp, kstk_eip , \
+	      signal, blocked, sigignore, sigcatch , \
+	      wchan, nswap, cnswap, exit_signal , \
+	      cpu_last_seen_on]
+	  end
+	rescue Errno::ENOENT
+	  nil
+	end
+      end
+    end
+  end
 end
 
