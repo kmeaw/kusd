@@ -200,7 +200,7 @@ module Commands
 	  d_ino, d_off, d_reclen = data
 	  break if d_reclen == 0
 	  rest = dents.read(d_reclen-(8+8+2))
-	  lastbyte = rest.bytes[-1]
+	  lastbyte = rest.bytes.to_a[-1]
 	  d_name = rest.sub /\x00.*/m, ''
 	  d_name.force_encoding Encoding::UTF_8
 	  yield [d_name, d_ino, lastbyte]
@@ -341,7 +341,7 @@ module Commands
 	  d_ino, d_off, d_reclen = data
 	  break if d_reclen == 0
 	  rest = dents.read(d_reclen-(8+8+2))
-	  lastbyte = rest.bytes[-1]
+	  lastbyte = rest.bytes.to_a[-1]
 	  d_name = rest.sub /\x00.*/m, ''
 	  d_name.force_encoding Encoding::UTF_8
 	  yield [d_name.to_i] if d_name =~ /\A\d+\Z/ and lastbyte == 4
