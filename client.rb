@@ -119,7 +119,7 @@ class Client
     fd = call! Syscalls::NR_open, scratch(filename + "\0"), mode
     yield fd
   ensure
-    call! Syscalls::NR_close, fd
+    call! Syscalls::NR_close, fd if fd
   end
 end
 
