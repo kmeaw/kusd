@@ -13,6 +13,10 @@ class Command
     Marshal.load(@in)
   end
 
+  def eof?
+    @in.eof?
+  end
+
   def fetchall
     return unless @in
     if block_given?
@@ -369,6 +373,11 @@ module Commands
   end
 
   class Pstat < Command
+    def initialize(t, *pids)
+      super(t)
+      @pids = pids
+    end
+
     def manifest
       [:pid, :comm, :state, :ppid, 
 	      :pgid, :sid, :tty, :tpgid, 
@@ -387,7 +396,7 @@ module Commands
     end
 
     def run(cli)
-      fetchall do |pid,cdr|
+      @pids.each do |pid|
 	begin
 	  cli.open_with "/proc/#{pid}/stat" do |fd|
 	    stat = ""
@@ -497,6 +506,42 @@ module Commands
 
     def manifest
       [:loglevel, :time, :message]
+    end
+  end
+
+  class Xargs < Command
+    def initialize(t, cmd, *args)
+      super(t)
+      cmd = cmd.capitalize.to_sym
+      raise KeyError unless Commands.constants.include? cmd
+      @cmd = Commands.const_get cmd
+      @args = args
+      @instance = @cmd.new([:arg] * @args.size + (@parent_manifest || []), *(@args + [nil] * t.size))
+    end
+
+    def run(cli)
+      fetchall { |d| @cmd.new([:arg] * @args.size + (@parent_manifest || []), *(@args + d)).run( cli ) { |e| yield e } }
+    end
+
+    def manifest
+      @instance.manifest
+    end
+  end
+
+  class Kill < Command
+    def initialize(t, sig, pid)
+      super(t)
+      @pid = Integer(pid)
+      @sig = Signal.list[sig.upcase] or Integer(sig)
+    end
+
+    def run(cli)
+      cli.call! Syscalls::NR_kill, @pid, @sig
+      yield [@pid]
+    end
+
+    def manifest
+      [:pid]
     end
   end
 end
