@@ -1,12 +1,17 @@
 #!/usr/bin/env ruby
+# -*- encoding: utf-8
+
 require 'readline'
 require './eval'
 require './client'
 require './commands'
 
+autocomplete = false
 cli = Client.new *ARGV
+eb = binding
 
 Readline.completion_proc = lambda do |word|
+  return unless autocomplete
   result = []
   orgword = word
   word ||= ""
@@ -65,10 +70,47 @@ end
 
 ev = Eval.new cli
 puts "Server (version = #{cli.version}) is ready."
+puts "Type :help for help."
+
+def help
+  puts "Help"
+  puts "  :help				this help"
+  puts "  :<ruby code>			eval ruby code"
+  puts "  :autocomplete={true|false}	enable/disable tab filename autocompletion"
+  puts
+  puts "Commands"
+  Commands.constants.each do |cmdname|
+    cmd = Commands.const_get cmdname
+    cmdname = cmdname.to_s.downcase
+    init = cmd.instance_method(:initialize)
+    parms = []
+    parms = init.parameters if init.respond_to? :parameters
+    parms.shift
+    parms.map! do |t,n|
+      if t == :req
+	n
+      elsif t == :opt
+	"[#{n}]"
+      elsif t == :rest
+	"#{n}…"
+      else
+	"<#{n}>"
+      end
+    end
+    puts "  #{cmdname} #{parms.join(' ')}"
+  end
+
+  ""
+end
+
 while d = Readline.readline("(#{cli.pid})> ")
   d.strip!
   next if d.empty?
   Readline::HISTORY.push d
+  if d =~ /^:/
+    p eval d[1..-1], eb
+    next
+  end
   begin
     ev.run d
   rescue ArgumentError => e
