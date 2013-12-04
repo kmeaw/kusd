@@ -60,6 +60,13 @@ class Client
     @scratch
   end
 
+  def readptr(p, b=Syscalls::PAGE_SIZE)
+    @s << self.pack(NR_write, 3, p, b)
+    data = @s.read(b)
+    @s.read(8).unpack("q").first
+    data
+  end
+
   def read(b=Syscalls::PAGE_SIZE)
     raise RuntimeError unless @scratch
     @s << self.pack(NR_write, 3, @scratch, b)
