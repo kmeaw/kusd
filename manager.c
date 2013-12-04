@@ -43,16 +43,15 @@ void mybzero(void *data, size_t sz)
 
 void _start()
 {
-  struct sockaddr_in servaddr;
+  struct sockaddr_in6 servaddr;
   int listenfd;
   int optval=1; 
   int i;
-  listenfd = __syscall3(__NR_socket,AF_INET,SOCK_STREAM,0);
+  listenfd = __syscall3(__NR_socket,AF_INET6,SOCK_STREAM,0);
   mybzero(&servaddr,sizeof(servaddr));
-  servaddr.sin_family = AF_INET;
-  servaddr.sin_addr.s_addr=0;
-  servaddr.sin_port=32000;
-  servaddr.sin_port = (servaddr.sin_port >> 8) | ((servaddr.sin_port & 0xFF) << 8);
+  servaddr.sin6_family = AF_INET6;
+  servaddr.sin6_port=32000;
+  servaddr.sin6_port = (servaddr.sin6_port >> 8) | ((servaddr.sin6_port & 0xFF) << 8);
   i=__syscall5(__NR_setsockopt,listenfd,SOL_SOCKET,SO_REUSEADDR,(long) &optval,sizeof(optval));
   if(i<0)
   { 
