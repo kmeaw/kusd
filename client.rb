@@ -7,10 +7,11 @@ class Client
   attr_reader :s
 
   include Syscalls
-  def initialize(host = 'localhost', port = 32000)
+  def initialize(host = 'localhost', port = 32000, lazy = false)
     @host = host
     @port = port
-    connect(@host, @port)
+    @lazy = lazy
+    connect(@host, @port) unless @lazy
   end
 
   def disconnect
@@ -33,6 +34,7 @@ class Client
   end
 
   def [](snr, *args)
+    connect(@host, @port) unless @s
     @s.write self.pack(snr, *args)
     data = @s.read(8)
     return nil if data.nil?

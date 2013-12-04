@@ -68,7 +68,7 @@ class Eval
 		p Marshal.load(rd)
 	      end
 	    else
-	      @cli = Client.new @cli.host, @cli.port
+	      @cli = Client.new @cli.host, @cli.port, true
 	    end
 	  end
 	rescue Exception => e
