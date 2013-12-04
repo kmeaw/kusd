@@ -4,43 +4,37 @@ Kernel/UserSpace interface network Daemon
 Components
 ---------
 
-- manager
+- [x] manager
   Listens a socket, forks a few times: children run server, parent restarts children.
-
-- server
+- [x] server
   Accepts a connection, fetches a sysreq (syscall NR and 6 arguments), runs it, loops
   until a connection is broken.
-
-- client
+- [x] client
   Connects to a manager+server, provides an interface to invoke remote sysreqs,
   optionally raise exceptions; manages a scratch buffer to transfer data from or
   to the remote host.
-
-- bash
+- [x] bash
   Parses a shell-like grammar.
-
-- eval
+- [x] eval
   Runs parsed statements.
-
-- interact
+- [x] interact
   Provides a user interface for the client library as if it is a remote shell client.
+- [ ] web
+  HTTP-proxy to interface client from the web.
 
 Key Features
 ----------
 
-- No server-side dynamic-library dependencies, manager+server fits in 4KiB.
-
-- Object-oriented shell commands, passing marshalled data across pipes.
-
-- No need to update server, most features can be implemented by changing
+- [x] No server-side dynamic-library dependencies, manager+server fits in 4KiB.
+- [x] Object-oriented shell commands, passing marshalled data across pipes.
+- [x] No need to update server, most features can be implemented by changing
   only the client code.
 
 Future work
 ------------
 
-- Manager could be reimplemented to provide encryption and authentication.
-
-- Client can limit itself by sysreq'ing ulimit.
+- [ ] Manager could be reimplemented to provide encryption and authentication.
+- [ ] Client can limit itself by sysreq'ing ulimit.
 
 
 Some examples
