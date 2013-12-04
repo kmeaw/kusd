@@ -423,19 +423,19 @@ module Commands
 		       "%d %d %d %d " \
 		       "%d %d %d %d " \
 		       "%d")
-	    yield [pid.to_i, comm, state, ppid , \
-	      pgid, sid, tty, tpgid , \
-	      flags, min_flt, cmin_flt, maj_flt, cmaj_flt , \
-	      utime, stime , \
-	      cutime, cstime, priority , \
-	      nice , \
-	      timeout, it_real_value , \
-	      start_time , \
-	      vsize , \
-	      rss , \
-	      rss_rlim, start_code, end_code, start_stack, kstk_esp, kstk_eip , \
-	      signal, blocked, sigignore, sigcatch , \
-	      wchan, nswap, cnswap, exit_signal , \
+	    yield [pid.to_i, comm, state, ppid, 
+	      pgid, sid, tty, tpgid, 
+	      flags, min_flt, cmin_flt, maj_flt, cmaj_flt, 
+	      utime, stime, 
+	      cutime, cstime, priority, 
+	      nice, 
+	      timeout, it_real_value, 
+	      start_time, 
+	      vsize, 
+	      rss, 
+	      rss_rlim, start_code, end_code, start_stack, kstk_esp, kstk_eip, 
+	      signal, blocked, sigignore, sigcatch, 
+	      wchan, nswap, cnswap, exit_signal, 
 	      cpu_last_seen_on] if pid
 	  end
 	rescue Errno::ENOENT
