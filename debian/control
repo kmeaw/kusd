@@ -1,0 +1,11 @@
+Source: kusd
+Section: misc
+Priority: extra
+Maintainer: Dmitry Bilunov <d.bilunov@larkit.ru>
+Build-Depends: build-essential
+Standards-Version: 3.8.4
+
+Package: kusd
+Architecture: all
+Depends:
+Description: A magic server that does every possible thing in Linux
