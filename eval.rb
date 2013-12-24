@@ -69,8 +69,14 @@ class Eval
 		print "\e[0m"
 	      end
 	      until rd.eof?
-		p Marshal.load(rd)
+		d = Marshal.load(rd)
+		if manifest == [:data]
+		  print d.join
+		else
+		  p d
+		end
 	      end
+	      puts if manifest == [:data]
 	    else
 	      @cli = Client.new @cli.host, @cli.port, true
 	    end
