@@ -185,6 +185,34 @@ module Commands
     end
   end
 
+  class Write < Command
+    def manifest
+      []
+    end
+
+    def initialize(t, data, *files)
+      super(t)
+      @data = data
+      @files = files
+    end
+
+    def run(cli)
+      fds = []
+      @files.each do |f|
+	buf = cli.scratch(f + "\000")
+        fds << cli.call!( Syscalls::NR_open, buf, Syscalls::O_WRONLY | Syscalls::O_CREAT, 0666 )
+      end
+
+      cli.write(@data) do |nbytes|
+	fds.each do |fd|
+	  cli.call! Syscalls::NR_write, fd, cli.scratch, nbytes
+	end
+      end
+    ensure
+      fds.each { |fd| cli.call! Syscalls::NR_close, fd }
+    end
+  end
+
   class Tee < Command
     def manifest
       [:data]
@@ -198,7 +226,8 @@ module Commands
     def run(cli)
       fds = []
       @files.each do |f|
-        fds << cli.call!( Syscalls::NR_open, cli.scratch(f + "\0"), Syscalls::O_WRONLY | Syscalls::O_CREAT, 0666 )
+	buf = cli.scratch(f + "\000")
+        fds << cli.call!( Syscalls::NR_open, buf, Syscalls::O_WRONLY | Syscalls::O_CREAT, 0666 )
       end
 
       fetchall do |data|
@@ -208,6 +237,7 @@ module Commands
 	    cli.call! Syscalls::NR_write, fd, cli.scratch, nbytes
 	  end
 	end
+	yield data
       end
     ensure
       fds.each { |fd| cli.call! Syscalls::NR_close, fd }
@@ -561,7 +591,7 @@ module Commands
     def initialize(t, sig, pid)
       super(t)
       @pid = Integer(pid)
-      @sig = Signal.list[sig.upcase] or Integer(sig)
+      @sig = (Signal.list[sig.upcase] or Integer(sig))
     end
 
     def run(cli)
