@@ -78,7 +78,7 @@ void myerror(const char *str)
     __syscall3(__NR_write, 2, (long) str, mystrlen(str));
     __syscall3(__NR_write, 2, (long) ": ", 2);
     *ptr = '0';
-    for(e = errno; e; e /= 10)
+    for(e = errno > 0 ? errno : -errno; e > 0; e /= 10)
       *ptr-- = '0' + (e % 10);
     ptr++;
     __syscall3(__NR_write, 2, (long) ptr, mystrlen(ptr));
