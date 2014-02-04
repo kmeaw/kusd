@@ -72,15 +72,32 @@ void STARTFUNC (void *_u1, void *_u2, void *_u3, char **keys)
   int p[5];
   SHA1_CTX sha1;
   uint8_t dgst[SHA1_SIZE];
+  char *keyscan, *keyprev, *keynext;
+  static char *keybuf[32];
+  uint32_t value, *vptr;
+  const char alpha[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+  if (*keys)
+  {
+    keyscan = *keys;
+    while (*keyscan)
+    {
+      keyprev = keyscan;
+      vptr = (uint32_t *) keyscan;
+      value = htonl(vptr);
+      s = 4;
+      keyscan += value;
+    }
+  }
 
   __syscall1(__NR_close, 3);
+acceptloop:
   ssl_ctx = ssl_ctx_new(0, 1);
   if (!ssl_ctx)
   {
     myerror("ssl_ctx_new");
     __syscall1(__NR_exit, 1);
   }
-acceptloop:
   fd = __syscall3(__NR_accept, 0, 0, 0);
   if (fd < 0)
   {
@@ -107,11 +124,11 @@ acceptloop:
     if (n == 0)
       continue;
     if (n < 0)
-      __syscall1(__NR_exit, 0);
+      SSL_FAIL;
     /* rsa = e + n + 0 + 0 + S*/
     /* dsa = p + q + g + y + S */
     if (n != 24)
-      __syscall1(__NR_exit, 0);
+      SSL_FAIL;
 
     s = 0;
     for(n = 0; n < 5; n++)
@@ -120,12 +137,11 @@ acceptloop:
     if (s > 1600)
     {
       ssl_write(ssl, "2BIG", 4);
-      ssl_free(ssl);
-      __syscall1(__NR_exit, 0);
+      SSL_FAIL;
     }
 
     if (!ssl_get_session_id_size(ssl))
-      __syscall1(__NR_exit, 1);
+      SSL_FAIL;
 
     SHA1_Init(&sha1);
     SHA1_Update(&sha1, ssl_get_session_id(ssl), ssl_get_session_id_size(ssl));
@@ -140,29 +156,33 @@ acceptloop:
         if (n && n != s)
         {
 	  ssl_write(ssl, "SIZE", 4);
-	  ssl_free(ssl);
-	  __syscall1(__NR_exit, 0);
+	  SSL_FAIL;
         }
       } while (!n);
       memcpy (crypto + 20, readbuf, n);
 
       if (!memcmp (crypto, "rsa:", 4))
       {
+	keyscan = keys;
+	while (*keyscan)
+	{
+	  n = htons(*(uint32_t *)keyscan);
+	  keyscan += 4;
+	}
+
 	RSA_CTX *ctx = 0;
 	RSA_pub_key_new(&ctx, crypto + 20, p[0], crypto + 20 + p[0], p[1]);
 	if (!ctx)
 	{
 	  ssl_write(ssl, "RSA!", 4);
-	  ssl_free(ssl);
-	  __syscall1(__NR_exit, 0);
+	  SSL_FAIL;
 	}
 	s = RSA_decrypt(ctx, crypto + 20 + p[0] + p[1], crypto + 20 + p[0] + p[1] + p[4], 0);
 	RSA_free(ctx);
 	if (s != sizeof(dgst) + 15)
 	{
 	  ssl_write(ssl, "RSA?", 4);
-	  ssl_free(ssl);
-	  __syscall1(__NR_exit, 0);
+	  SSL_FAIL;
 	}
 	if (!memcmp (crypto + 20 + p[0] + p[1] + p[4] + 15, dgst, sizeof(dgst)))
 	  break;
@@ -179,19 +199,15 @@ acceptloop:
 	if (bi_compare(_s, _q) != -1)
 	{
 	  ssl_write(ssl, "BADQ", 4);
-	  ssl_free(ssl);
-	  __syscall1(__NR_exit, 0);
+	  SSL_FAIL;
 	}
-
-	
 	
 	bi_terminate(ctx);
       }
       else
       {
 	ssl_write(ssl, "BAD.", 4);
-	ssl_free(ssl);
-	__syscall1(__NR_exit, 0);
+	SSL_FAIL;
       }
 
       ssl_write(ssl, "NEXT", 4);
@@ -249,6 +265,7 @@ acceptloop:
 //  __syscall1(__NR_close, fd);
   fd = sv[0];
   __syscall1(__NR_close, sv[1]);
+  ssl_free(ssl);
   if (fd != 3)
   {
     __syscall2(__NR_dup2, fd, 3);
