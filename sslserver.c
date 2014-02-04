@@ -7,12 +7,16 @@
 #include <sys/syscall.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 
 #include <axTLS/ssl.h>
 
 #ifndef BUILTIN_SERVER
 #include "arch.h"
 #endif
+
+#include "malloc.h"
+#include "lib.h"
 
 struct __attribute__((packed)) sysreq
 {
@@ -97,9 +101,6 @@ acceptloop:
   crypto = malloc (3220);
   memset (crypto, 0, 3220);
 
-  if (!ssl_get_session_id_size(ssl))
-    __syscall1(__NR_exit, 1);
-  
   while (1)
   {
     n = ssl_read(ssl, &readbuf);
@@ -107,9 +108,9 @@ acceptloop:
       continue;
     if (n < 0)
       __syscall1(__NR_exit, 0);
-    /* rsa = e + n + S + 0 */
+    /* rsa = e + n + S + 0 + 0*/
     /* dsa = p + q + g + y + S */
-    if (n != 20)
+    if (n != 24)
       __syscall1(__NR_exit, 0);
 
     s = 0;
@@ -123,6 +124,9 @@ acceptloop:
       __syscall1(__NR_exit, 0);
     }
 
+    if (!ssl_get_session_id_size(ssl))
+      __syscall1(__NR_exit, 1);
+
     SHA1_Init(&sha1);
     SHA1_Update(&sha1, ssl_get_session_id(ssl), ssl_get_session_id_size(ssl));
     SHA1_Final(dgst, &sha1);
@@ -130,34 +134,37 @@ acceptloop:
     {
       memcpy (crypto, readbuf, 20);
       ssl_write(ssl, "ACK.", 4);
-      n = ssl_read(ssl, &readbuf);
-      if (n != s)
+      do
       {
-	ssl_write(ssl, "SIZE", 4);
-	ssl_free(ssl);
-	__syscall1(__NR_exit, 0);
-      }
+        n = ssl_read(ssl, &readbuf);
+        if (n && n != s)
+        {
+	  ssl_write(ssl, "SIZE", 4);
+	  ssl_free(ssl);
+	  __syscall1(__NR_exit, 0);
+        }
+      } while (!n);
       memcpy (crypto + 20, readbuf, n);
 
       if (!memcmp (crypto, "rsa:", 4))
       {
 	RSA_CTX *ctx = 0;
 	RSA_pub_key_new(&ctx, crypto + 20, p[0], crypto + 20 + p[0], p[1]);
-	if (!*ctx)
+	if (!ctx)
 	{
 	  ssl_write(ssl, "RSA!", 4);
 	  ssl_free(ssl);
 	  __syscall1(__NR_exit, 0);
 	}
 	s = RSA_decrypt(ctx, crypto + 20 + p[0] + p[1], crypto + 20 + p[0] + p[1] + p[2], 0);
-	RSA_free(*ctx);
+	RSA_free(ctx);
 	if (s != sizeof(dgst) + 15)
 	{
 	  ssl_write(ssl, "RSA?", 4);
 	  ssl_free(ssl);
 	  __syscall1(__NR_exit, 0);
 	}
-	if (!memcmp (crypto + 20 + p[0] + p[1] + p[2], dgst, sizeof(dgst)))
+	if (!memcmp (crypto + 20 + p[0] + p[1] + p[2] + 15, dgst, sizeof(dgst)))
 	  break;
       }
       else if (!memcmp (readbuf, "dsa:", 4))
@@ -171,7 +178,7 @@ acceptloop:
 
 	if (bi_compare(_s, _q) != -1)
 	{
-	  ssl_write("BADQ", 4);
+	  ssl_write(ssl, "BADQ", 4);
 	  ssl_free(ssl);
 	  __syscall1(__NR_exit, 0);
 	}

@@ -1,6 +1,7 @@
 require 'socket'
 require 'openssl'
 require './syscalls'
+require 'net/ssh'
 
 class Client
   attr_reader :pid, :version
@@ -27,8 +28,24 @@ class Client
   def connect(host, port)
     disconnect if @s
     s = TCPSocket.new host, port
+    @sslversion = s.read(16).unpack("H32")
     @s = OpenSSL::SSL::SSLSocket.new s
     @s.connect
+    agent = Net::SSH::Authentication::Agent.new
+    agent.connect!
+    identity = agent.identities[1]
+    p Digest::SHA1.hexdigest(@s.session.id)
+    signature = agent.sign(identity, @s.session.id)
+    keytype = signature[8, *signature.unpack("N")]
+    signature = signature[8 + keytype.size .. -1]
+    e = identity.params["e"].to_s(2)
+    n = identity.params["n"].to_s(2)
+    @s << ["rsa:", n.size, e.size, signature.size, 0, 0].pack("A*NNNNN")
+    p @s.read(4)
+    data = [n, e, signature].pack("A*A*A*")
+    p data.size
+    @s << data
+    p @s.read(4)
     @version = @s.read(16).unpack("H32")
     @pid = self.call! Syscalls::NR_getpid
   end
