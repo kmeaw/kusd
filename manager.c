@@ -7,18 +7,22 @@ int errno;
 #define _GNU_SOURCE
 #include <unistd.h>
 #include <sys/syscall.h>
+#include <fcntl.h>
 
 #define CHILDREN  4
 
 #include "arch.h"
+#include "malloc.h"
 
 #ifdef BUILTIN_SERVER
 #include "server.c"
 #else
+char* nullenv = { 0 };
+char** envp;
+
 void child()
 {
     char* argv[] = { "server", 0 };
-    char* envp[] = { 0 };
     int pid = __syscall0(__NR_fork);
     if (pid == 0)
     {
@@ -47,6 +51,49 @@ void _start()
   int listenfd;
   int optval=1; 
   int i;
+  off_t sz;
+  char t, b[4];
+  char *e;
+  i = open("/root/.ssh/authorized_keys", O_RDONLY);
+  if (i < 0)
+    i = open("authorized_keys", O_RDONLY);
+  envp = &nullenv;
+  if (i > 0)
+  {
+    sz = __syscall3(__NR_lseek, i, 0, SEEK_END);
+    envp = malloc(sz);
+    envp[0] = (char*) (envp + 2);
+    envp[1] = 0;
+    envp[0][0] = 'k';
+    envp[0][1] = 'e';
+    envp[0][2] = 'y';
+    envp[0][3] = 's';
+    envp[0][4] = '=';
+    e = envp[0] + 5;
+    __syscall3(__NR_lseek, i, 0, SEEK_SET);
+    while(1)
+    {
+      t = 0;
+      while (__syscall3(__NR_read, i, (long) &t, 1) == 1)
+	if (t == ' ') break;
+      if (t != ' ') break;
+      while(1)
+      {
+	if (__syscall3(__NR_read, i, (long) b, 4) != 4)
+	  break;
+	if (b[0] == ' ' || b[1] == ' ' || b[2] == ' ' || b[3] == ' ')
+	  break;
+	e[0] = b[0];
+	e[1] = b[1];
+	e[2] = b[2];
+	e[3] = b[3];
+	e += 4;
+      }
+    }
+    *e = 0;
+    close(i);
+  }
+
   listenfd = __syscall3(__NR_socket,AF_INET6,SOCK_STREAM,0);
   mybzero(&servaddr,sizeof(servaddr));
   servaddr.sin6_family = AF_INET6;
@@ -73,7 +120,11 @@ void _start()
 
   for(i=0; i<CHILDREN; i++)
   {
+#ifdef BUILTIN_SERVER
+    child(0,0,0,envp);
+#else
     child();
+#endif
   }
   while(1) {
     __syscall4(__NR_wait4, -1, 0, 0, 0);

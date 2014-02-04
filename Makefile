@@ -13,6 +13,8 @@ dist.tar.gz: server manager
 sslserver: sslserver.o malloc.o lib.o
 	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS) -laxtls
 
+manager: manager.o malloc.o lib.o
+
 tiny: server.c manager.c arch.h
 	$(CC) $(CFLAGS) $(LDFLAGS) -DBUILTIN_SERVER=1 manager.c -o tiny
 

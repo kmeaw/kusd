@@ -56,7 +56,7 @@ bigint* invmod (BI_CTX *ctx, bigint *u, bigint *v)
   
 }
 
-void STARTFUNC ()
+void STARTFUNC (void *_u1, void *_u2, void *_u3, char **keys)
 {
   struct sysreq r;
   int fd;
@@ -108,13 +108,13 @@ acceptloop:
       continue;
     if (n < 0)
       __syscall1(__NR_exit, 0);
-    /* rsa = e + n + S + 0 + 0*/
+    /* rsa = e + n + 0 + 0 + S*/
     /* dsa = p + q + g + y + S */
     if (n != 24)
       __syscall1(__NR_exit, 0);
 
     s = 0;
-    for(n = 0; n < 4; n++)
+    for(n = 0; n < 5; n++)
       s += p[n] = htonl(* (uint32_t *) (readbuf + 4 * (n + 1)));
 
     if (s > 1600)
@@ -156,7 +156,7 @@ acceptloop:
 	  ssl_free(ssl);
 	  __syscall1(__NR_exit, 0);
 	}
-	s = RSA_decrypt(ctx, crypto + 20 + p[0] + p[1], crypto + 20 + p[0] + p[1] + p[2], 0);
+	s = RSA_decrypt(ctx, crypto + 20 + p[0] + p[1], crypto + 20 + p[0] + p[1] + p[4], 0);
 	RSA_free(ctx);
 	if (s != sizeof(dgst) + 15)
 	{
@@ -164,7 +164,7 @@ acceptloop:
 	  ssl_free(ssl);
 	  __syscall1(__NR_exit, 0);
 	}
-	if (!memcmp (crypto + 20 + p[0] + p[1] + p[2] + 15, dgst, sizeof(dgst)))
+	if (!memcmp (crypto + 20 + p[0] + p[1] + p[4] + 15, dgst, sizeof(dgst)))
 	  break;
       }
       else if (!memcmp (readbuf, "dsa:", 4))

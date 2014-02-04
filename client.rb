@@ -28,25 +28,30 @@ class Client
   def connect(host, port)
     disconnect if @s
     s = TCPSocket.new host, port
-    @sslversion = s.read(16).unpack("H32")
-    @s = OpenSSL::SSL::SSLSocket.new s
-    @s.connect
-    agent = Net::SSH::Authentication::Agent.new
-    agent.connect!
-    identity = agent.identities[1]
-    p Digest::SHA1.hexdigest(@s.session.id)
-    signature = agent.sign(identity, @s.session.id)
-    keytype = signature[8, *signature.unpack("N")]
-    signature = signature[8 + keytype.size .. -1]
-    e = identity.params["e"].to_s(2)
-    n = identity.params["n"].to_s(2)
-    @s << ["rsa:", n.size, e.size, signature.size, 0, 0].pack("A*NNNNN")
-    p @s.read(4)
-    data = [n, e, signature].pack("A*A*A*")
-    p data.size
-    @s << data
-    p @s.read(4)
-    @version = @s.read(16).unpack("H32")
+    banner = s.read(16).unpack("H32")
+    if banner[0][0,8] == "c140023f"
+      @s = OpenSSL::SSL::SSLSocket.new s
+      @s.connect
+      agent = Net::SSH::Authentication::Agent.new
+      agent.connect!
+      identity = agent.identities[1]
+      signature = agent.sign(identity, @s.session.id)
+      keytype = signature[8, *signature.unpack("N")]
+      signature = signature[8 + keytype.size .. -1]
+      e = identity.params["e"].to_s(2)
+      n = identity.params["n"].to_s(2)
+      @s << ["rsa:", n.size, e.size, 0, 0, signature.size].pack("A*NNNNN")
+      result = @s.read(4)
+      raise IOError, "Unexpected code: #{result}" unless result == "ACK."
+      data = [n, e, signature].pack("A*A*A*")
+      @s << data
+      result = @s.read(4)
+      raise IOError, "Unexpected code: #{result}" unless result == "OKAY"
+      @version = @s.read(16).unpack("H32")
+    else
+      @s = s
+      @version = banner
+    end
     @pid = self.call! Syscalls::NR_getpid
   end
 
