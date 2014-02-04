@@ -80,14 +80,36 @@ void STARTFUNC (void *_u1, void *_u2, void *_u3, char **keys)
   if (*keys)
   {
     keyscan = *keys;
+    n = 0;
     while (*keyscan)
     {
       keyprev = keyscan;
+      keynext = strchr(keyscan, ' ');
+      if (keynext)
+	keynext++;
+      else
+	keynext = keyscan + strlen(keyscan);
       vptr = (uint32_t *) keyscan;
       value = htonl(vptr);
       s = 4;
       keyscan += value;
+      
+      if (!memcmp (keyscan, "ssh-dss")) /* dsa: */
+      {
+      }
+      else if (!memcmp (keyscan, "ssh-rsa")) /* rsa: */
+      {
+	keybuf[n] = malloc(3220);
+	memset (keybuf[n], 0, 3220);
+	memcpy (keybuf[n], "rsa:", 4);
+	vptr = (uint32_t *) (keybuf[n] + 4);
+	*vptr++ = 
+	n++;
+      }
+
+      keyscan = keynext;
     }
+    keybuf[n] = 0;
   }
 
   __syscall1(__NR_close, 3);
