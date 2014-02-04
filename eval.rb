@@ -78,7 +78,7 @@ class Eval
 	      end
 	      puts if manifest == [:data]
 	    else
-	      @cli = Client.new @cli.host, @cli.port, true
+	      @cli = @cli.dup
 	    end
 	  end
 	rescue Exception => e

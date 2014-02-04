@@ -28,6 +28,7 @@ void STARTFUNC ()
   long n, s;
   uint64_t id[] = IDENT;
 
+  __syscall1(__NR_close, 3);
 acceptloop:
   fd = __syscall3(__NR_accept, 0, 0, 0);
   if (fd < 0)

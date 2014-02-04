@@ -40,10 +40,10 @@ Readline.completion_proc = lambda do |word|
   result.map(&:first).select{|x| orgword.nil? or x.start_with?(orgsuffix)}.map{|x| orgprefix + x}
 end
 
-def sysexec(d)
+def sysexec(c,d)
   old = `stty -g`
   child = fork do
-    cli = Client.new *ARGV
+    cli = c.dup
     cli.call! Syscalls::NR_dup2, 3, 0
     cli.call! Syscalls::NR_dup2, 3, 1
     cli.call! Syscalls::NR_dup2, 3, 2

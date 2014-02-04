@@ -22,7 +22,7 @@ void child()
     int pid = __syscall0(__NR_fork);
     if (pid == 0)
     {
-	__syscall3(__NR_execve, (long) "./server", (long) argv, (long) envp);
+	__syscall3(__NR_execve, (long) "./sslserver", (long) argv, (long) envp);
         myerror("exec");
         __syscall1(__NR_exit, 1);
     }

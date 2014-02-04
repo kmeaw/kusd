@@ -62,14 +62,14 @@ static __inline long __syscall6(long n, long a1, long a2, long a3, long a4, long
 
 int errno;
 
-int mystrlen(const char *str)
+static int mystrlen(const char *str)
 {
   int sz = 0;
   while (*str++) sz++;
   return sz;
 }
 
-void myerror(const char *str)
+static void myerror(const char *str)
 {
     char num[5] = { 0,0,0,0,0 };
     char *ptr = num + sizeof(num) - 2;

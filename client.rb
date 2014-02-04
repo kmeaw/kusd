@@ -1,4 +1,5 @@
 require 'socket'
+require 'openssl'
 require './syscalls'
 
 class Client
@@ -14,6 +15,10 @@ class Client
     connect(@host, @port) unless @lazy
   end
 
+  def dup
+    Client.new(@host, @port, true)
+  end
+
   def disconnect
     @s.close
     @s = nil
@@ -21,7 +26,9 @@ class Client
 
   def connect(host, port)
     disconnect if @s
-    @s = TCPSocket.new host, port
+    s = TCPSocket.new host, port
+    @s = OpenSSL::SSL::SSLSocket.new s
+    @s.connect
     @version = @s.read(16).unpack("H32")
     @pid = self.call! Syscalls::NR_getpid
   end
