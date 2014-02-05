@@ -121,14 +121,22 @@ ssize_t write(int fd, const void *ptr, size_t count)
   return result;
 }
 
-void memset (void *s, int c, size_t n)
+void *memset (void *_s, int c, size_t n)
 {
-  while (n)
-  {
-    *((char*)s) = c;
-    n--;
-    s = ((char*)s) + 1;
-  }
+  char *s = (char*) _s;
+  while (n--)
+    *s++ = c;
+  return _s;
+}
+
+char *strchr(const char *s, int c)
+{
+  while (*s)
+    if (*s == c)
+      return s;
+    else
+      s++;
+  return 0;
 }
 
 int memcmp(const void *_s1, const void *_s2, size_t n)
@@ -140,6 +148,8 @@ int memcmp(const void *_s1, const void *_s2, size_t n)
   {
     if (*s1 != *s2)
       return *s1 - *s2;
+    s1++;
+    s2++;
     n--;
   }
 

@@ -29,6 +29,8 @@ struct __attribute__((packed)) sysreq
 #define STARTFUNC _start
 #endif
 
+#define SSL_FAIL do { ssl_ctx_free(ssl_ctx); goto acceptloop; } while(0)
+
 bigint* invmod (BI_CTX *ctx, bigint *u, bigint *v)
 {
   bigint *u3 = bi_clone(ctx, u);
@@ -56,7 +58,21 @@ bigint* invmod (BI_CTX *ctx, bigint *u, bigint *v)
   
 }
 
-void STARTFUNC (void *_u1, void *_u2, void *_u3, char **keys)
+void __attribute__ ((naked)) STARTFUNC (void)
+{
+     asm(" xorl %ebp, %ebp\n"
+	 " movq %rdx, %r9\n"
+	 " popq %rsi\n"
+	 " movq %rsp, %rdx\n"
+	 " andq $~15, %rsp\n"
+	 " pushq %rax\n"
+	 " pushq %rsp\n"
+	 " call go\n"
+	 " hlt\n"
+         );
+}
+
+void go(void __attribute__((unused)) *zero, int argc, char**argv)
 {
   struct sysreq r;
   int fd;
@@ -72,14 +88,17 @@ void STARTFUNC (void *_u1, void *_u2, void *_u3, char **keys)
   int p[5];
   SHA1_CTX sha1;
   uint8_t dgst[SHA1_SIZE];
-  char *keyscan, *keyprev, *keynext;
-  static char *keybuf[32];
+  char *keyscan, *keyprev, *keynext, *keywrite, *keymove;
+  static char *keybuf[32] = { 0, };
   uint32_t value, *vptr;
   const char alpha[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  char *keys = 0;
 
-  if (*keys)
+  if (argv)
+    keys = argv[argc + 1];
+  if (keys)
   {
-    keyscan = *keys;
+    keyscan = keys + 5;
     n = 0;
     while (*keyscan)
     {
@@ -89,25 +108,68 @@ void STARTFUNC (void *_u1, void *_u2, void *_u3, char **keys)
 	keynext++;
       else
 	keynext = keyscan + strlen(keyscan);
-      vptr = (uint32_t *) keyscan;
-      value = htonl(vptr);
-      s = 4;
-      keyscan += value;
-      
-      if (!memcmp (keyscan, "ssh-dss")) /* dsa: */
+      keybuf[n] = malloc(3220);
+      memset (keybuf[n], 0, 3220);
+      keywrite = keybuf[n] + 28;
+
+      while(*keyscan && *keyscan != ' ')
       {
-      }
-      else if (!memcmp (keyscan, "ssh-rsa")) /* rsa: */
-      {
-	keybuf[n] = malloc(3220);
-	memset (keybuf[n], 0, 3220);
-	memcpy (keybuf[n], "rsa:", 4);
-	vptr = (uint32_t *) (keybuf[n] + 4);
-	*vptr++ = 
-	n++;
+	value   = 0;
+	value  |= strchr(alpha, *keyscan++) - alpha;
+	value <<= 6;
+	value  |= strchr(alpha, *keyscan++) - alpha;
+	value <<= 6;
+	if (*keyscan != '=')
+	  value  |= strchr(alpha, *keyscan++) - alpha;
+	else
+	  keyscan++;
+	value <<= 6;
+	if (*keyscan != '=')
+	  value  |= strchr(alpha, *keyscan++) - alpha;
+	else
+	  keyscan++;
+
+	*keywrite++ = (value >> 16) & 0xFF;
+	if (keyscan[-2] != '=')
+	  *keywrite++ = (value >> 8) & 0xFF;
+	if (keyscan[-1] != '=')
+	  *keywrite++ = value & 0xFF;
       }
 
+      s = 0;
+      vptr = (uint32_t*) (keybuf[n] + 4);
+      for (keyscan = keymove = keybuf[n] + 28; 
+	   keyscan < keywrite && (char*) vptr < keybuf[n] + 28; 
+	   s++)
+      { 
+	value = htonl(* ((uint32_t *) keyscan));
+	if (!s && value && keyscan == keybuf[n] + 28)
+	{
+	  if (value > 3 && value < 32)
+	  {
+	    memcpy (keybuf[n], keyscan + 4 + value - 3, 3);
+	    keybuf[n][3] = ':';
+          }
+	  keyscan = keymove + 4 + value;
+	}
+	else if (value)
+	{
+	  *vptr++ = value;
+	  keyscan += 4;
+	  memcpy (keymove, keyscan, value);
+	  keymove += value;
+	  keyscan += value;
+	}
+	else
+	  break;
+      }
+      if (keymove < keybuf[n] + 3220)
+        memset (keymove, 0, keybuf[n] + 3220 - keymove);
+      if ((char*) vptr < keybuf[n] + 24)
+	*vptr = 44;
       keyscan = keynext;
+
+      n++;
     }
     keybuf[n] = 0;
   }
@@ -147,7 +209,7 @@ acceptloop:
       continue;
     if (n < 0)
       SSL_FAIL;
-    /* rsa = e + n + 0 + 0 + S*/
+    /* rsa = e + n + 0 + 0 + S */
     /* dsa = p + q + g + y + S */
     if (n != 24)
       SSL_FAIL;
@@ -182,18 +244,29 @@ acceptloop:
         }
       } while (!n);
       memcpy (crypto + 20, readbuf, n);
-
-      if (!memcmp (crypto, "rsa:", 4))
+      s = -1;
+      for(n = 0; n < sizeof(keybuf) / sizeof(keybuf[0]) - 1; n++)
       {
-	keyscan = keys;
-	while (*keyscan)
+	if (!keybuf[n])
+	  continue;
+	if (!memcmp (keybuf[n] + 28, crypto + 20, p[0] + p[1] + p[2] + p[3]))
 	{
-	  n = htons(*(uint32_t *)keyscan);
-	  keyscan += 4;
+	  s = n;
+	  break;
 	}
-
+      }
+      if (s == -1)
+      {
+	if (keybuf[0])
+	  ssl_write(ssl, "NEXT", 4);
+	else
+	  ssl_write(ssl, "KEYS", 4);
+      }
+      else if (!memcmp (crypto, "rsa:", 4))
+      {
 	RSA_CTX *ctx = 0;
-	RSA_pub_key_new(&ctx, crypto + 20, p[0], crypto + 20 + p[0], p[1]);
+	for(s=0; s < p[1] && !crypto[20 + p[0] + s]; s++);
+	RSA_pub_key_new(&ctx, crypto + 20 + p[0] + s, p[1] - s, crypto + 20, p[0]);
 	if (!ctx)
 	{
 	  ssl_write(ssl, "RSA!", 4);
@@ -209,7 +282,7 @@ acceptloop:
 	if (!memcmp (crypto + 20 + p[0] + p[1] + p[4] + 15, dgst, sizeof(dgst)))
 	  break;
       }
-      else if (!memcmp (readbuf, "dsa:", 4))
+      else if (!memcmp (readbuf, "dss:", 4))
       {
 	BI_CTX *ctx = bi_initialize();
 	bigint *_p = bi_import(ctx, crypto + 20, p[0]);
@@ -231,8 +304,6 @@ acceptloop:
 	ssl_write(ssl, "BAD.", 4);
 	SSL_FAIL;
       }
-
-      ssl_write(ssl, "NEXT", 4);
     }
   }
   free (crypto);
@@ -287,7 +358,6 @@ acceptloop:
 //  __syscall1(__NR_close, fd);
   fd = sv[0];
   __syscall1(__NR_close, sv[1]);
-  ssl_free(ssl);
   if (fd != 3)
   {
     __syscall2(__NR_dup2, fd, 3);
@@ -314,6 +384,7 @@ acceptloop:
       __syscall3(__NR_write, fd, (long) &r.sa, sizeof(r.sa));
     }
   }
+  ssl_free(ssl);
   goto acceptloop;
 }
 

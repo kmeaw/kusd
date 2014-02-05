@@ -34,19 +34,32 @@ class Client
       @s.connect
       agent = Net::SSH::Authentication::Agent.new
       agent.connect!
-      identity = agent.identities[1]
-      signature = agent.sign(identity, @s.session.id)
-      keytype = signature[8, *signature.unpack("N")]
-      signature = signature[8 + keytype.size .. -1]
-      e = identity.params["e"].to_s(2)
-      n = identity.params["n"].to_s(2)
-      @s << ["rsa:", n.size, e.size, 0, 0, signature.size].pack("A*NNNNN")
-      result = @s.read(4)
-      raise IOError, "Unexpected code: #{result}" unless result == "ACK."
-      data = [n, e, signature].pack("A*A*A*")
-      @s << data
-      result = @s.read(4)
-      raise IOError, "Unexpected code: #{result}" unless result == "OKAY"
+      authresult = false
+      agent.identities.each do |identity|
+	signature = agent.sign(identity, @s.session.id)
+	keytype = signature[4, *signature.unpack("N")]
+	next if keytype != "ssh-rsa"
+	signature = signature[8 + keytype.size .. -1]
+	e = identity.params["e"].to_s(2)
+	n = identity.params["n"].to_s(2)
+	if n.size == 256 or n.size == 512
+	  n = [0,n].pack("CA*")
+	end
+	@s << ["rsa:", e.size, n.size, 0, 0, signature.size].pack("A*NNNNN")
+	result = @s.read(4)
+	raise IOError, "Unexpected code: ``#{result}''" unless result == "ACK."
+	data = [e, n, signature].pack("A*A*A*")
+	@s << data
+	result = @s.read(4)
+	raise IOError, "Unexpected code: ``#{result}''" unless %w{OKAY NEXT}.include? result
+	if result == "OKAY"
+	  authresult = true
+	  break
+	end
+      end
+      unless authresult
+	raise SecurityError, "No matching identity found"
+      end
       @version = @s.read(16).unpack("H32")
     else
       @s = s

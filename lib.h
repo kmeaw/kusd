@@ -1,4 +1,5 @@
 /* This file was automatically generated.  Do not edit! */
+int gettimeofday(struct timeval *tv,struct timezone *tz);
 int strcmp(const char *s1,const char *s2);
 int sprintf(char *str,const char *fmt,...);
 int vprintf(const char *fmt,va_list ap);
@@ -22,14 +23,15 @@ int close(int fd);
 FILE *fopen(const char *path,const char *mode);
 void *mremap(void *old_address,size_t old_size,size_t new_size,int flags,void *new_address);
 int memcmp(const void *_s1,const void *_s2,size_t n);
-void memset(void *s,int c,size_t n);
+char *strchr(const char *s,int c);
+void *memset(void *_s,int c,size_t n);
 ssize_t write(int fd,const void *ptr,size_t count);
 ssize_t read(int fd,void *ptr,size_t count);
 int munmap(void *addr,size_t length);
 void *mmap(void *addr,size_t length,int prot,int flags,int fd,off_t offset);
 long int __fdelt_chk(long int d);
 void *__memcpy_chk(char *dest,char *src,size_t len,size_t dstlen);
-uint8_t *memcpy(uint8_t *dest,const uint8_t *src,size_t n);
+void *memcpy(void *dest,const void *src,size_t n);
 size_t strlen(const char *s);
 void *__strcpy_chk(char *dest,char *src,size_t dstlen);
 void __chk_fail();
