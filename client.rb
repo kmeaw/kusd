@@ -53,6 +53,12 @@ class Client
 	elsif keytype == "ssh-dss"
 	  p = identity.params["p"].to_s(2)
 	  q = identity.params["q"].to_s(2)
+	  if p.size == 64 or p.size == 128
+	    p = [0,p].pack("CA*")
+	  end
+	  if q.size == 10 or q.size == 20
+	    q = [0,q].pack("CA*")
+	  end
 	  g = identity.params["g"].to_s(2)
 	  y = identity.params["pub_key"].to_s(2)
 	  @s << ["dss:", p.size, q.size, g.size, y.size, signature.size].pack("A*NNNNN")
