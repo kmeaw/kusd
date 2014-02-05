@@ -30,7 +30,6 @@ struct __attribute__((packed)) sysreq
 #endif
 
 #define SSL_FAIL do { ssl_ctx_free(ssl_ctx); goto acceptloop; } while(0)
-
 /*
  * Delete any leading 0's (and allow for 0).
  */
@@ -44,6 +43,24 @@ static bigint *trim(bigint *bi)
     return bi;
 }
 
+/*
+ * Perform an integer divide on a bigint.
+ */
+static bigint *bi_int_divide(BI_CTX *ctx, bigint *biR, comp denom)
+{
+    int i = biR->size - 1;
+    long_comp r = 0;
+
+    do
+    {
+        r = (r<<COMP_BIT_SIZE) + biR->comps[i];
+        biR->comps[i] = (comp)(r / denom);
+        r %= denom;
+    } while (--i >= 0);
+
+    return trim(biR);
+}
+
 bigint* invmod (BI_CTX *ctx, bigint *a, bigint *b)
 {
   bigint *x, *y, *u, *v, *A, *B, *C, *D, *zero, *one;
@@ -54,7 +71,7 @@ bigint* invmod (BI_CTX *ctx, bigint *a, bigint *b)
   y = bi_clone(ctx, b);
 
   /* 2. [modified] if x,y are both even then return an error! */
-  if (x->comps[0] & 1 == 0 && y->comps[0] & 1 == 0)
+  if ((x->comps[0] & 1) == 0 && (y->comps[0] & 1) == 0)
     return 0;
 
   /* 3. u=x, v=y, A=1, B=0, C=0,D=1 */
@@ -67,16 +84,26 @@ bigint* invmod (BI_CTX *ctx, bigint *a, bigint *b)
   zero = trim(int_to_bi(ctx, 0));
   one = int_to_bi(ctx, 1);
 
+  bi_permanent(A);
+  bi_permanent(B);
+  bi_permanent(C);
+  bi_permanent(D);
+  bi_permanent(u);
+  bi_permanent(v);
+  bi_permanent(zero);
+  bi_permanent(one);
+  bi_permanent(y);
+
 top:
   /* 4.  while u is even do */
-  while (u->comps[0] & 1 == 0) {
+  while ((u->comps[0] & 1) == 0) {
     /* 4.1 u = u/2 */
     u = bi_int_divide(ctx, u, 2);
     /* 4.2 if A or B is odd then */
-    if (A->comps[0] & 1 == 1 || B->comps[0] & 1 == 1) {
+    if ((A->comps[0] & 1) == 1 || (B->comps[0] & 1) == 1) {
       /* A = (A+y)/2, B = (B-x)/2 */
       A = bi_int_divide(ctx, bi_add(ctx, A, y), 2);
-      B = bi_int_divide(ctx, bi_sub(ctx, B, x, 0), 2);
+      B = bi_int_divide(ctx, bi_subtract(ctx, B, x, 0), 2);
     }
     /* A = A/2, B = B/2 */
     A = bi_int_divide(ctx, A, 2);
@@ -84,18 +111,18 @@ top:
   }
 
   /* 5.  while v is even do */
-  while (v->comps[0] & 1 == 0) {
+  while ((v->comps[0] & 1) == 0) {
     /* 5.1 v = v/2 */
     v = bi_int_divide(ctx, v, 2);
     /* 5.2 if C or D is odd then */
-    if (C->comps[0] & 1 == 1 || D->comps[0] & 1 == 1) {
+    if ((C->comps[0] & 1) == 1 || (D->comps[0] & 1) == 1) {
       /* C = (C+y)/2, D = (D-x)/2 */
-      C = mp_int_div(ctx, mp_add(ctx, C, y), 2);
-      D = mp_int_div(ctx, bi_sub(ctx, D, x, 0), 2);
+      C = bi_int_divide(ctx, bi_add(ctx, C, y), 2);
+      D = bi_int_divide(ctx, bi_subtract(ctx, D, x, 0), 2);
     }
     /* C = C/2, D = D/2 */
-    C = mp_int_div(ctx, C, 2);
-    D = mp_int_div(ctx, D, 2);
+    C = bi_int_divide(ctx, C, 2);
+    D = bi_int_divide(ctx, D, 2);
   }
 
   /* 6.  if u >= v then */
@@ -117,16 +144,40 @@ top:
   /* now a = C, b = D, gcd == g*v */
 
   /* if v != 1 then there is no inverse */
-  if (bi_compare (v, one) == 0)
-    return 0;
-
+  if (bi_compare (v, one) != 0)
+    C = 0;
+  else
+  {
   /* if its too low */
   while (low)
     C = bi_subtract(ctx, b, C, &low);
 
   /* too big */
-  while (bi_compare(C, b) >= 0)
+  while (bi_compare(C, b) > 0)
     C = bi_subtract(ctx, C, b, 0);
+  }
+
+  bi_depermanent(A);
+  bi_depermanent(B);
+  bi_depermanent(C);
+  bi_depermanent(D);
+  bi_depermanent(u);
+  bi_depermanent(v);
+  bi_depermanent(zero);
+  bi_depermanent(one);
+  bi_depermanent(y);
+
+  bi_free(ctx, A);
+  bi_free(ctx, B);
+  bi_free(ctx, C);
+  bi_free(ctx, D);
+  bi_free(ctx, x);
+  bi_free(ctx, y);
+  bi_free(ctx, u);
+  bi_free(ctx, v);
+  bi_free(ctx, zero);
+  bi_free(ctx, one);
+  bi_free(ctx, y);
   
   /* C is now the inverse */
   return C;
@@ -239,8 +290,6 @@ void go(void __attribute__((unused)) *zero, int argc, char**argv)
       }
       if (keymove < keybuf[n] + 3220)
         memset (keymove, 0, keybuf[n] + 3220 - keymove);
-      if ((char*) vptr < keybuf[n] + 24)
-	*vptr = 44;
       keyscan = keynext;
 
       n++;
@@ -356,23 +405,56 @@ acceptloop:
 	if (!memcmp (crypto + 20 + p[0] + p[1] + p[4] + 15, dgst, sizeof(dgst)))
 	  break;
       }
-      else if (!memcmp (readbuf, "dss:", 4))
+      else if (!memcmp (crypto, "dss:", 4))
       {
 	BI_CTX *ctx = bi_initialize();
-	bigint *_p = trim(bi_import(ctx, crypto + 20, p[0]));
-	bigint *_q = trim(bi_import(ctx, crypto + 20 + p[0], p[1]));
-	bigint *_g = trim(bi_import(ctx, crypto + 20 + p[0] + p[1], p[2]));
-	bigint *_y = trim(bi_import(ctx, crypto + 20 + p[0] + p[1] + p[2], p[3]));
-	bigint *_s = trim(bi_import(ctx, dgst, sizeof(dgst)));
-	bigint *zero = trim(int_to_bi(ctx, 0));
-	bigint *one = int_to_bi(ctx, 1);
+	bigint *_p = (bi_import(ctx, crypto + 20, p[0]));
+	bigint *_q = (bi_import(ctx, crypto + 20 + p[0], p[1]));
+	bigint *_g = (bi_import(ctx, crypto + 20 + p[0] + p[1], p[2]));
+	bigint *_y = (bi_import(ctx, crypto + 20 + p[0] + p[1] + p[2], p[3]));
+	bigint *_s = (bi_import(ctx, crypto + 20 + p[0] + p[1] + p[2] + p[3], p[4] / 2)); /* 40 */
+	bigint *d = (bi_import(ctx, dgst, sizeof(dgst)));
 
-	if (bi_compare(_s, _q) != -1 || bi_compare(_s, zero) == 0)
+	bi_permanent(_p);
+	bi_permanent(_q);
+	bi_permanent(_g);
+	bi_permanent(_y);
+	bi_permanent(_s);
+	bi_permanent(d);
+
+	if (p[4] != 40)
+	{
+	  ssl_write(ssl, "BADS", 4);
+	  SSL_FAIL;
+	}
+
+	if (bi_compare(_s, _q) != -1)
 	{
 	  ssl_write(ssl, "BADQ", 4);
 	  SSL_FAIL;
 	}
-	
+
+	bigint *w = invmod(ctx, _s, _q);
+	if (!w)
+	{
+	  ssl_write(ssl, "s^-1", 4);
+	  SSL_FAIL;
+	}
+
+	bi_depermanent(_p);
+	bi_depermanent(_q);
+	bi_depermanent(_g);
+	bi_depermanent(_y);
+	bi_depermanent(_s);
+	bi_depermanent(d);
+
+	bi_free(ctx, _p);
+	bi_free(ctx, _q);
+	bi_free(ctx, _g);
+	bi_free(ctx, _y);
+	bi_free(ctx, _s);
+	bi_free(ctx, d);
+
 	bi_terminate(ctx);
       }
       else

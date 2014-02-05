@@ -320,7 +320,7 @@ time_t mktime(struct tm *tm)
   return tm->tm_sec + 60 * (tm->tm_min + 60 * (tm->tm_hour + 24 * (tm->tm_yday + 365 * (tm->tm_year - 70)) + 6 * (tm->tm_year - 70)));
 }
 
-#if 0
+#ifndef __OPTIMIZE__
 uint32_t ntohl(uint32_t netlong)
 {
   return (netlong >> 24) | ( ((netlong >> 16) & 0xFF) << 8) | ( ((netlong >> 8) & 0xFF) << 16) | ((netlong & 0xFF) << 24);
