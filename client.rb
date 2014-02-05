@@ -38,20 +38,34 @@ class Client
       agent.identities.each do |identity|
 	signature = agent.sign(identity, @s.session.id)
 	keytype = signature[4, *signature.unpack("N")]
-	next if keytype != "ssh-rsa"
 	signature = signature[8 + keytype.size .. -1]
-	e = identity.params["e"].to_s(2)
-	n = identity.params["n"].to_s(2)
-	if n.size == 256 or n.size == 512
-	  n = [0,n].pack("CA*")
+	if keytype == "ssh-rsa"
+	  e = identity.params["e"].to_s(2)
+	  n = identity.params["n"].to_s(2)
+	  if n.size == 256 or n.size == 512
+	    n = [0,n].pack("CA*")
+	  end
+	  @s << ["rsa:", e.size, n.size, 0, 0, signature.size].pack("A*NNNNN")
+	  result = @s.read(4)
+	  raise IOError, "Unexpected code: ``#{result}''" unless result == "ACK."
+	  data = [e, n, signature].pack("A*A*A*")
+	  @s << data
+	elsif keytype == "ssh-dss"
+	  p = identity.params["p"].to_s(2)
+	  q = identity.params["q"].to_s(2)
+	  g = identity.params["g"].to_s(2)
+	  y = identity.params["pub_key"].to_s(2)
+	  @s << ["dss:", p.size, q.size, g.size, y.size, signature.size].pack("A*NNNNN")
+	  result = @s.read(4)
+	  raise IOError, "Unexpected code: ``#{result}''" unless result == "ACK."
+	  data = [p, q, g, y, signature].pack("A*A*A*A*A*")
+	  @s << data
+	else
+	  next # Unsupported keytype
 	end
-	@s << ["rsa:", e.size, n.size, 0, 0, signature.size].pack("A*NNNNN")
-	result = @s.read(4)
-	raise IOError, "Unexpected code: ``#{result}''" unless result == "ACK."
-	data = [e, n, signature].pack("A*A*A*")
-	@s << data
 	result = @s.read(4)
 	raise IOError, "Unexpected code: ``#{result}''" unless %w{OKAY NEXT}.include? result
+	p result
 	if result == "OKAY"
 	  authresult = true
 	  break

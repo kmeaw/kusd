@@ -31,31 +31,105 @@ struct __attribute__((packed)) sysreq
 
 #define SSL_FAIL do { ssl_ctx_free(ssl_ctx); goto acceptloop; } while(0)
 
-bigint* invmod (BI_CTX *ctx, bigint *u, bigint *v)
+/*
+ * Delete any leading 0's (and allow for 0).
+ */
+static bigint *trim(bigint *bi)
 {
-  bigint *u3 = bi_clone(ctx, u);
-  bigint *v3 = bi_clone(ctx, v);
-  bigint *u1 = int_to_bi(ctx, 1);
-  bigint *v1 = int_to_bi(ctx, 0);
-  int v1n = 0;
-  int v3n = 0;
-  while (!v3n)
-  {
-    bigint *q = bi_divide(ctx, u3, v3, 0);
-    bigint *v2 = bi_multiply(ctx, v1, q);
-    u1 = v1;
-    if (v1n)
-      v1 = bi_add(ctx, u1, v2);
-    else;
-      v1 = bi_subtract(ctx, u1, v2, &v1n);
-    bigint *v4 = bi_multiply(ctx, v3, q);
-    u3 = v3;
-    if (v3n)
-      v3 = bi_add(ctx, u3, v4);
-    else
-      v3 = bi_subtract(ctx, u3, v4, &v3n);
+    while (bi->comps[bi->size-1] == 0 && bi->size > 1)
+    {
+        bi->size--;
+    }
+
+    return bi;
+}
+
+bigint* invmod (BI_CTX *ctx, bigint *a, bigint *b)
+{
+  bigint *x, *y, *u, *v, *A, *B, *C, *D, *zero, *one;
+  int low = 0;
+
+  /* x = a, y = b */
+  x = bi_divide(ctx, a, b, 1);
+  y = bi_clone(ctx, b);
+
+  /* 2. [modified] if x,y are both even then return an error! */
+  if (x->comps[0] & 1 == 0 && y->comps[0] & 1 == 0)
+    return 0;
+
+  /* 3. u=x, v=y, A=1, B=0, C=0,D=1 */
+  u = bi_clone(ctx, x);
+  v = bi_clone(ctx, y);
+  A = int_to_bi(ctx, 1);
+  B = int_to_bi(ctx, 0);
+  C = int_to_bi(ctx, 0);
+  D = int_to_bi(ctx, 1);
+  zero = trim(int_to_bi(ctx, 0));
+  one = int_to_bi(ctx, 1);
+
+top:
+  /* 4.  while u is even do */
+  while (u->comps[0] & 1 == 0) {
+    /* 4.1 u = u/2 */
+    u = bi_int_divide(ctx, u, 2);
+    /* 4.2 if A or B is odd then */
+    if (A->comps[0] & 1 == 1 || B->comps[0] & 1 == 1) {
+      /* A = (A+y)/2, B = (B-x)/2 */
+      A = bi_int_divide(ctx, bi_add(ctx, A, y), 2);
+      B = bi_int_divide(ctx, bi_sub(ctx, B, x, 0), 2);
+    }
+    /* A = A/2, B = B/2 */
+    A = bi_int_divide(ctx, A, 2);
+    B = bi_int_divide(ctx, B, 2);
   }
+
+  /* 5.  while v is even do */
+  while (v->comps[0] & 1 == 0) {
+    /* 5.1 v = v/2 */
+    v = bi_int_divide(ctx, v, 2);
+    /* 5.2 if C or D is odd then */
+    if (C->comps[0] & 1 == 1 || D->comps[0] & 1 == 1) {
+      /* C = (C+y)/2, D = (D-x)/2 */
+      C = mp_int_div(ctx, mp_add(ctx, C, y), 2);
+      D = mp_int_div(ctx, bi_sub(ctx, D, x, 0), 2);
+    }
+    /* C = C/2, D = D/2 */
+    C = mp_int_div(ctx, C, 2);
+    D = mp_int_div(ctx, D, 2);
+  }
+
+  /* 6.  if u >= v then */
+  if (bi_compare (u, v) >= 0) {
+    /* u = u - v, A = A - C, B = B - D */
+    u = bi_subtract(ctx, u, v, 0);
+    A = bi_subtract(ctx, A, C, 0);
+    B = bi_subtract(ctx, B, D, 0);
+  } else {
+    /* v = v - u, C = C - A, D = D - B */
+    v = bi_subtract(ctx, v, u, 0);
+    C = bi_subtract(ctx, C, A, &low);
+    D = bi_subtract(ctx, D, B, 0);
+  }
+
+  if (bi_compare (trim(u), zero))
+    goto top;
+
+  /* now a = C, b = D, gcd == g*v */
+
+  /* if v != 1 then there is no inverse */
+  if (bi_compare (v, one) == 0)
+    return 0;
+
+  /* if its too low */
+  while (low)
+    C = bi_subtract(ctx, b, C, &low);
+
+  /* too big */
+  while (bi_compare(C, b) >= 0)
+    C = bi_subtract(ctx, C, b, 0);
   
+  /* C is now the inverse */
+  return C;
 }
 
 void __attribute__ ((naked)) STARTFUNC (void)
@@ -285,13 +359,15 @@ acceptloop:
       else if (!memcmp (readbuf, "dss:", 4))
       {
 	BI_CTX *ctx = bi_initialize();
-	bigint *_p = bi_import(ctx, crypto + 20, p[0]);
-	bigint *_q = bi_import(ctx, crypto + 20 + p[0], p[1]);
-	bigint *_g = bi_import(ctx, crypto + 20 + p[0] + p[1], p[2]);
-	bigint *_y = bi_import(ctx, crypto + 20 + p[0] + p[1] + p[2], p[3]);
-	bigint *_s = bi_import(ctx, dgst, sizeof(dgst));
+	bigint *_p = trim(bi_import(ctx, crypto + 20, p[0]));
+	bigint *_q = trim(bi_import(ctx, crypto + 20 + p[0], p[1]));
+	bigint *_g = trim(bi_import(ctx, crypto + 20 + p[0] + p[1], p[2]));
+	bigint *_y = trim(bi_import(ctx, crypto + 20 + p[0] + p[1] + p[2], p[3]));
+	bigint *_s = trim(bi_import(ctx, dgst, sizeof(dgst)));
+	bigint *zero = trim(int_to_bi(ctx, 0));
+	bigint *one = int_to_bi(ctx, 1);
 
-	if (bi_compare(_s, _q) != -1)
+	if (bi_compare(_s, _q) != -1 || bi_compare(_s, zero) == 0)
 	{
 	  ssl_write(ssl, "BADQ", 4);
 	  SSL_FAIL;
