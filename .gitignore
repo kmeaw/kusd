@@ -13,3 +13,5 @@ debian/prerm.debhelper
 debian/substvars
 debian/tmp/
 
+.*.sw[ponm]
+
