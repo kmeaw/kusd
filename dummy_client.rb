@@ -1,4 +1,5 @@
 require './syscalls'
+require 'fiddle'
 
 class DummyClient
   attr_reader :pid, :version
@@ -6,7 +7,10 @@ class DummyClient
   attr_reader :s
 
   include Syscalls
-  def initialize(host = 'localhost', port = 32000, lazy = false)
+  def initialize
+    @host = "localhost"
+    @version = "dummy0"
+    connect
   end
 
   def dup
@@ -16,7 +20,7 @@ class DummyClient
   def disconnect
   end
 
-  def connect(host, port)
+  def connect(host=nil, port=nil)
     @pid = $$
   end
 
@@ -29,8 +33,8 @@ class DummyClient
 
   def [](snr, *args)
     begin
-      sysscall snr, *args
-    rescue Exception => e
+      syscall snr, *args
+    rescue SystemCallError => e
       0 - e.errno
     end
   end

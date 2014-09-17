@@ -8,11 +8,12 @@ class Eval
 
   def go(stmt)
     if stmt[:type] == :exec
-      cmd = stmt[:word].capitalize.to_sym
+      raise NotImplementedError if stmt[:car][:type] != :lit
+      cmd = stmt[:car][:value].capitalize.to_sym
       raise KeyError unless Commands.constants.include? cmd
       cmd = Commands.const_get cmd
       arity = cmd.instance_method(:initialize).arity
-      uarity = stmt[:arguments].size + 1
+      uarity = stmt[:cdr].size + 1
       unless arity == uarity or (arity < 0 and uarity + 1 >= -arity)
 	if arity < 0
 	  arity = "at least #{-(arity+2)}"
@@ -29,25 +30,34 @@ class Eval
   end
 
   def run(d)
-    parsed = Bash.new.parse(d)
+    parser = Bash.new
+    parser.load(d)
     rd, wr, cont = nil
     ischild = false
     manifest = nil
 
-    parsed.each do |command|
+    parser.each do |command|
+      if command[:type] == :pipe
+	command = command[:values]
+      elsif command[:type] == :exec
+	command = [command]
+      else
+	raise NotImplementedError, "Unknown type: #{command[:type]}"
+      end
       until command.empty?
 	begin
-	  async, stmt = command.shift
+	  stmt = command.shift
 	  if stmt[:word] == ":"
 	    stmt[:word] = "true"
 	  end
 	  cmd = go stmt
 	  rd, wr, prevrd = *IO.pipe, rd
 	  cont = fork
+	  arguments = stmt[:cdr] ? stmt[:cdr].map{|x| x[:value]} : []
 	  if cont
 	    rd.close
 	    begin
-	      instance = cmd.new(manifest, *stmt[:arguments])
+	      instance = cmd.new(manifest, *arguments)
 	      instance.in = prevrd
 	      instance.run(@cli) do |out|
 		Marshal.dump out, wr
@@ -61,7 +71,7 @@ class Eval
 	  else
 	    ischild = true
 	    wr.close
-	    manifest = cmd.new(manifest, *stmt[:arguments]).manifest
+	    manifest = cmd.new(manifest, *arguments).manifest
 	    if command.empty?
 	      if STDOUT.tty?
 		print "\e[33m"

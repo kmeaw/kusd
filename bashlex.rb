@@ -12,26 +12,26 @@ class Lexer
 
    TOKENS = {
         root: [
-            [:NEWLINE, /[;\n]/m],
-	    [:PIPE, /[|]/],
+            [nil, /[;\n]/m],
+	    [nil, /[|]/],
             [:keyword, /\$\(\(/, :math],
-            [:keyword, /\$\(/, :paren],
+            [:BACKTICK, /\$\(/, :paren],
             [:keyword, /\${#?/, :curly],
-            [:backtick, /`/, :backticks],
+            [:BACKTICK, /`/, :backticks],
         #'basic': [
-	    [:SPACE, /#.*\n/],
+	    [:SPACE, /#.*/],
 	    [:escape, /\\[\w\W]/],
 	    [:ASGNWORD, /(\b\w+)(\s*)(=)/],
 #	    [:operator, /[\[\]{}()=]/],
 	    [:here, /<<</],
 	    [:operator, /&&|\|\|/],
         #'data': [
-            [:WORD, /\$?"(\\\\|\\[0-7]+|\\.|[^"\\])*"/],
-            [:WORD, /\$?'(\\\\|\\[0-7]+|\\.|[^'\\])*'/],
+            [:DQUOTE, /"/, :dquote],
+            [:SQUOTE, /'(\\\\|\\[0-7]+|\\.|[^'\\])*'/],
 	    [:SPACE, /[ \t]+/],
             [:WORD, /[^\s{}|();\n$"\'`\\<]+/],
             [:number, /\d+(?= |\Z)/],
-            [:variable, /\$#?(\w+|.)/],
+            [:WORD, /\$#?(\w+|.)/],
             [:WORD, /</]
         ],
         curly: [
@@ -42,7 +42,7 @@ class Lexer
 	    [:punct, /:/],
         ],
         paren: [
-	    [:keyword, /\)/, :pop]
+	    [:ENDBACKTICK, /\)/, :pop]
         ],
         math: [
 	    [:keyword, /\)\)/, :pop],
@@ -50,12 +50,46 @@ class Lexer
 	    [:number, /\d+/]
         ],
         backticks: [
-	    [:endbacktick, /`/, :pop]
+	    [:ENDBACKTICK, /`/, :pop]
         ],
+	dquote: [
+	    [:ENDDQUOTE, /"/, :pop],
+            [:BACKTICK, /\$\(/, :paren],
+            [:BACKTICK, /`/, :backticks],
+	    [:VAR, /[$][a-zA-Z0-9_]+/],
+	    [:WORD, /([^"$`\\]|\\.)+/],
+	],
     }
 
+  SPECIALS = %w|
+    if then else elif fi case esac for select while until do done in function time { } ! [[ ]] coproc
+  |
+
+  RESTART = %W[
+    \n ; ( ) | & { } && ! |& do elif else if || ;; then time coproc until while
+  ] + [nil]
+
   def run
+    prev_tokens = []
+    simple_run do |token|
+      if token.first == :WORD
+	if token.last == "in" and prev_tokens[-1].first == :WORD and prev_tokens[-2].first == "for"
+  	  token = ["in", "in"]
+	elsif token.first == :WORD and prev_tokens.last and RESTART.include?(prev_tokens.last.last) and SPECIALS.include?(token.last)
+	  token = [token.last, token.last]
+	end
+      end
+
+      yield token
+
+      prev_tokens.push token
+      prev_tokens.shift if prev_tokens.size > 2
+    end
+  end
+
+  def simple_run
     mode = :root
+    backtick = []
     modestack = []
     until @str.eos?
       text, type, match, switch = nil
@@ -69,10 +103,18 @@ class Lexer
 	break if text = @str.scan(match)
       end
       if text
-	if type == :SPACE or mode == :backticks or type == :backtick
+	if type == :SPACE # or mode == :backticks or type == :backtick
 #	  yield [type, mode, text]
+	elsif type == :ENDBACKTICK
+	  backtick << [:EOF, false]
+	  yield [:BACKTICK, backtick]
+	  backtick = []
 	else
-	  yield [type, text] 
+	  if [:backticks, :paren].include? mode
+	    backtick << [(type or text), text]
+	  else
+	    yield [(type or text), text] unless type == :BACKTICK
+	  end
 	end
 	if switch == :pop
 	  mode = modestack.pop
@@ -85,6 +127,7 @@ class Lexer
         yield [x, x]
       end
     end
+    yield [:EOF, false]
   end
 end
 
