@@ -62,7 +62,7 @@ class Lexer
     }
 
   SPECIALS = %w|
-    if then else elif fi case esac for select while until do done in function time { } ! [[ ]] coproc
+    if then else elif fi case esac for while until do done in function time { } ! [[ ]] coproc
   |
 
   RESTART = %W[
