@@ -512,11 +512,30 @@ module Commands
       end
     end
   end
+  
+  class Lines < Command
+    def manifest
+      [:string]
+    end
+
+    def run(cli)
+      parts = []
+      pending = ""
+
+      fetchall do |d|
+	pending << d.join("\n")
+	*parts, pending = pending.split(/[\n\r]+/m)
+	parts.each {|part| yield [part]}
+      end
+
+      yield [pending] unless pending.strip.empty?
+    end
+  end
 
   class Head < Command
     def initialize(t, n=10)
       super(t)
-      @n = n
+      @n = n.to_i
     end
 
     def run(cli)
@@ -533,7 +552,7 @@ module Commands
   class Tail < Command
     def initialize(t, n=10)
       super(t)
-      @n = n
+      @n = n.to_i
     end
 
     def run(cli)
