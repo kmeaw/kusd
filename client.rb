@@ -51,6 +51,7 @@ class Client
 	  data = [e, n, signature].pack("A*A*A*")
 	  @s << data
 	elsif keytype == "ssh-dss"
+	  next
 	  p = identity.params["p"].to_s(2)
 	  q = identity.params["q"].to_s(2)
 	  if p.size == 64 or p.size == 128
