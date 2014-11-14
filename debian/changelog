@@ -1,3 +1,9 @@
+kusd (0.02) unstable; urgency=low
+
+  * SSL-enabled version
+
+ -- Dmitry Bilunov <kmeaw@yandex-team.ru>  Fri, 14 Nov 2014 20:14:47 +0300
+
 kusd (0.01) unstable; urgency=low
 
   * Initial pkg for Yandex.
