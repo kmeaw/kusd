@@ -83,9 +83,10 @@ require './bashlex'
 ---- inner
 
   def load(str)
-    @q = []
+    q = []
     lex = Lexer.new(str)
-    lex.run { |q| @q << q }
+    lex.run { |qe| q << qe }
+    setq q
   end
 
   def setq(qs)
@@ -113,8 +114,17 @@ require './bashlex'
     end
   end
 
+  def parse(str)
+    load(str)
+    do_parse
+  end
+
   def next
-    while @q[0] and @q[0][0] != :EOF and parsed = do_parse
+    while true
+      break if @q[0].nil?
+      break if @q[0][0] == :EOF
+      parsed = do_parse
+      break if parsed.nil?
       yield parsed unless parsed == "\n"
     end
     raise StopIteration
@@ -187,7 +197,6 @@ end
 if $PROGRAM_NAME == __FILE__
   require 'pp'
   parser = Bash.new
-  p "INIT OK"
   program = <<-EOF
 #!/bin/sh
     cat | shuf | head 
