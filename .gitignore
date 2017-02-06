@@ -14,4 +14,4 @@ debian/substvars
 debian/tmp/
 
 .*.sw[ponm]
-
+test
