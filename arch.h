@@ -84,4 +84,10 @@ static void myerror(const char *str)
     __syscall3(__NR_write, 2, (long) ptr, mystrlen(ptr));
     __syscall3(__NR_write, 2, (long) "\n", 1);
 }
+
+void __stack_chk_fail()
+{
+  __syscall3(__NR_write, 2, (long) "Stack check failed.", sizeof("Stack check failed.") - 1);
+  __syscall1(__NR_exit, 127);
+}
 #endif

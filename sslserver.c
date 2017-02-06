@@ -213,7 +213,7 @@ void go(void __attribute__((unused)) *zero, int argc, char**argv)
   int p[5];
   SHA1_CTX sha1;
   uint8_t dgst[SHA1_SIZE];
-  char *keyscan, *keyprev, *keynext, *keywrite, *keymove;
+  char *keyscan, *keynext, *keywrite, *keymove;
   static char *keybuf[32] = { 0, };
   uint32_t value, *vptr;
   const char alpha[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -227,7 +227,6 @@ void go(void __attribute__((unused)) *zero, int argc, char**argv)
     n = 0;
     while (*keyscan)
     {
-      keyprev = keyscan;
       keynext = strchr(keyscan, ' ');
       if (keynext)
 	keynext++;
@@ -395,7 +394,7 @@ acceptloop:
 	  ssl_write(ssl, "RSA!", 4);
 	  SSL_FAIL;
 	}
-	s = RSA_decrypt(ctx, crypto + 20 + p[0] + p[1], crypto + 20 + p[0] + p[1] + p[4], 0);
+	s = RSA_decrypt(ctx, crypto + 20 + p[0] + p[1], crypto + 20 + p[0] + p[1] + p[4], sizeof(dgst), 0);
 	RSA_free(ctx);
 	if (s != sizeof(dgst) + 15)
 	{

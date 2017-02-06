@@ -14,11 +14,11 @@ int errno;
 #include "arch.h"
 #include "malloc.h"
 
+char* nullenv = { 0 };
+char** envp;
 #ifdef BUILTIN_SERVER
 #include "server.c"
 #else
-char* nullenv = { 0 };
-char** envp;
 
 void child()
 {
@@ -51,6 +51,7 @@ void _start()
   int listenfd;
   int optval=1; 
   int i;
+#ifndef BUILTIN_SERVER
   off_t sz;
   char t, b[4];
   char *e;
@@ -94,6 +95,7 @@ void _start()
     *e = 0;
     close(i);
   }
+#endif
 
   listenfd = __syscall3(__NR_socket,AF_INET6,SOCK_STREAM,0);
   mybzero(&servaddr,sizeof(servaddr));
