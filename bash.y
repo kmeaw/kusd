@@ -7,8 +7,10 @@ prechigh
   right '|' '|&'
 preclow
 
+start inputunit
+
 rule
-inputunit	: simple_list simple_list_terminator		{ result = val[0]; yyaccept }
+inputunit	: simple_list simple_list_terminator		{ @result = val[0]; yyaccept }
 		| "\n"						{ result = :xx; yyaccept }
 		| EOF						{ yyerror }
 simple_list_terminator	: "\n"					{ result = :xx }
@@ -123,9 +125,9 @@ require './bashlex'
     while true
       break if @q[0].nil?
       break if @q[0][0] == :EOF
-      parsed = do_parse
-      break if parsed.nil?
-      yield parsed unless parsed == "\n"
+      do_parse
+      break if @result.nil?
+      yield @result unless @result == "\n"
     end
     raise StopIteration
   end

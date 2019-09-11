@@ -188,7 +188,7 @@ class Client
 
   def scratch!
     @scratch = self[NR_mmap, 0, Syscalls::PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0]
-    raise RuntimeError, "Unable to allocate scratch page" if (-1 .. -255) === @scratch
+    raise RuntimeError, "Unable to allocate scratch page" if (-1 .. -255) === @scratch or @scratch.nil?
   end
 
   def open_with(filename, mode=Syscalls::O_RDONLY)
